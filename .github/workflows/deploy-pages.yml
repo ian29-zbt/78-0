@@ -1,0 +1,65 @@
+name: Deploy 78-0 to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out 78-0
+        uses: actions/checkout@v4
+
+      - name: Restore packaged source when present
+        run: |
+          if [ -f 78-0-source.zip ]; then
+            mkdir .site-source
+            unzip -q 78-0-source.zip -d .site-source
+            echo "SITE_DIR=.site-source" >> "$GITHUB_ENV"
+          else
+            echo "SITE_DIR=." >> "$GITHUB_ENV"
+          fi
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: cd "$SITE_DIR" && npm ci
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Build 78-0
+        run: cd "$SITE_DIR" && npm run build:pages
+        env:
+          GITHUB_PAGES: "true"
+          NEXT_PUBLIC_BASE_PATH: "/78-0"
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ env.SITE_DIR }}/out
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Publish GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
